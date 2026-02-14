@@ -1,0 +1,27 @@
+# Python virtual environment
+venv/
+
+# Environment variables (secrets)
+.env
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE/editor files (optional, but good if using VS Code or similar)
+.vscode/
+*.swp
+
+# Logs and temp files (we'll add logging later)
+*.log
+temp/
+*.db
+credentials.json
+
+_config.py
+config.py
+.env
+
+_arch_old/
