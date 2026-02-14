@@ -15,7 +15,7 @@ from discord.ext import commands
 
 from utils.text_format import spaced_padding, CustomFormatter
 from services.xp_service import XPService
-from config import DEBUG_MODE, POSTGRES_DETAILS, TOKEN, OWNER_IDS
+from config import DEBUG_MODE, POSTGRES_DETAILS, DISCORD_TOKEN, OWNER_IDS
 
 
 INITIAL_EXTENSIONS = [
@@ -47,8 +47,7 @@ class BaseBot(commands.AutoShardedBot):
             owner_ids=OWNER_IDS,
             activity=discord.Activity(
                 type=discord.ActivityType.custom,
-                name="F = ma ?",
-                state="Going Haywire! (inDev) 🥴 /info",
+                state="F = ma ?",
             ),
             *args,
             **kwargs,
@@ -156,11 +155,12 @@ class BaseBot(commands.AutoShardedBot):
 
         print(
             colored(
-                spaced_padding("Extensions", 52)
-                + "\n| > "
-                + "\n| > ".join(loaded_exts)
+                spaced_padding("Inital Extensions", 52)
+                + "\n| + "
+                + "\n| + ".join(loaded_exts)
                 + "\n",
                 "light_blue",
+                attrs=["bold"],
             )
         )
 
@@ -199,12 +199,13 @@ class BaseBot(commands.AutoShardedBot):
                 + "\n| > ".join(self.basic_info)
                 + "\n",
                 "cyan",
+                attrs=["bold"],
             )
         )
 
     async def start(self) -> None:
         await super().start(
-            token=TOKEN,
+            token=DISCORD_TOKEN,
             reconnect=True,
         )
 
