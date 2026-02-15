@@ -7,22 +7,15 @@ import logging
 from termcolor import colored
 
 def spaced_padding(text, width=50, padding="-") -> str:
-    """
-    Formats the given `text` by adding padding on both sides.
+    """Formats the given `text` by adding padding on both sides.
 
-    Parameters
-    -----------
-    text: :class:`str`
-        The text to format.
-    width: :class:`int`
-        The width of the text.
-    padding: :class:`str`
-        The padding to use.
+    :param text(: class:`str`): The text to format.
+    :param width(: class:`int`, optional): The width of the text. (Default value = 50)
+    :param padding(: class:`str`, optional): The padding to use. (Default value = "-")
+    :param text: 
+    :param width:  (Default value = 50)
+    :param padding:  (Default value = "-")
 
-    Returns
-    --------
-    :class:`str`
-        The formatted text.
     """
     text_length = len(text)
     total_padding = width - text_length - 2
@@ -34,20 +27,15 @@ def spaced_padding(text, width=50, padding="-") -> str:
 
 
 def truncate(string: str, width: int = 50) -> str:
-    """
-    Truncates the given `text` to the given `width`.
+    """Truncates the given `text` to the given `width`.
 
-    Parameters
-    -----------
-    text: :class:`str`
-        The text to truncate.
-    width: :class:`int`
-        The width of the text.
+    :param text(: class:`str`): The text to truncate.
+    :param width(: class:`int`): The width of the text.
+    :param string: str:
+    :param width: int:  (Default value = 50)
+    :param string: str: 
+    :param width: int:  (Default value = 50)
 
-    Returns
-    --------
-    :class:`str`
-        The truncated text.
     """
 
     if len(string) > width:
@@ -56,20 +44,7 @@ def truncate(string: str, width: int = 50) -> str:
 
 
 class CustomFormatter(logging.Formatter):
-    """
-    Formatter for console logging
-
-    Parameters
-    -----------
-    _fmt: :class:`str`
-        The format
-
-    _dt_fmt: :class:`str`
-        The date format
-
-    _style: :class:`str`
-        The style
-    """
+    """Formatter for console logging"""
 
     def __init__(self, _fmt, _dt_fmt, _style, *args, **kwargs):
         super().__init__(_fmt, _dt_fmt, _style, *args, **kwargs)
@@ -85,14 +60,10 @@ class CustomFormatter(logging.Formatter):
         self.style = _style
 
     def format(self, record):
-        """
-        Format the stream
+        """Format the stream
 
-        Parameters
-        -----------
+        :param record: 
 
-        record: :class:`logging.LogRecord`
-            The log record
         """
         log_fmt = self.formats.get(record.levelno)
         formatter = logging.Formatter(log_fmt, self.datefmt, self.style)

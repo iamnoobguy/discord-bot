@@ -8,17 +8,6 @@ class XPService:
     def __init__(self, pool: asyncpg.Pool):
         self.pool = pool
 
-    async def init_db(self):
-        query = """
-        CREATE TABLE IF NOT EXISTS users (
-            user_id BIGINT PRIMARY KEY,
-            xp INTEGER NOT NULL DEFAULT 0
-        );
-        """
-        async with self.pool.acquire() as conn:
-            await conn.execute(query)
-        logger.info("XP table initialized.")
-
     async def get_xp(self, user_id: int) -> int:
         query = "SELECT xp FROM users WHERE user_id = $1"
 
@@ -27,10 +16,10 @@ class XPService:
 
         return row["xp"] if row else 0
 
-    async def add_xp(self, user_id: int, amount: int):
+    async def update_xp(self, user_id: int, delta: int):
         """Add XP (positive/negative), clamp to minimum 0"""
 
-        if amount == 0:
+        if delta == 0:
             return
 
         async with self.pool.acquire() as conn:
@@ -42,7 +31,7 @@ class XPService:
                 )
 
                 current = row["xp"] if row else 0
-                new_xp = max(0, current + amount)
+                new_xp = max(0, current + delta)
                 delta = new_xp - current
 
                 if delta == 0:

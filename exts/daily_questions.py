@@ -4,7 +4,7 @@ import discord
 from discord.ext import commands, tasks
 import pytz
 
-import _arch_old._config as _config  # todo: migrate to new config structure
+from config import DAILY_CHANNEL_ID, DAILY_POST_HOUR, DAILY_POST_MINUTE
 from services.gsheets_service import GSheetService
 
 
@@ -14,13 +14,17 @@ DIFFICULTY_COLORS = {
     "Hard": 0xFF0000,
 }
 
-class GSheets(commands.Cog):
+
+class DailyQuestions(commands.Cog):
+    """ """
+
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.sheet_service = GSheetService()
         self.daily_question.start()
 
     def cog_unload(self):
+        """ """
         self.daily_question.cancel()
 
     # Scheduler discord.ext.tasks
@@ -28,16 +32,15 @@ class GSheets(commands.Cog):
     async def daily_question(self):
         now = datetime.now(pytz.utc)
 
-        if now.hour == _config.DAILY_HOUR and now.minute == _config.DAILY_MINUTE:
+        if now.hour == DAILY_POST_HOUR and now.minute == DAILY_POST_MINUTE:
             await self.post_daily_question()
 
     @daily_question.before_loop
     async def before_daily(self):
         await self.bot.wait_until_ready()
 
-
     async def post_daily_question(self):
-        channel = self.bot.get_channel(_config.CHANNEL_ID)
+        channel = self.bot.get_channel(DAILY_CHANNEL_ID)
 
         if not channel:
             self.bot.logger.error("Daily question channel not found.")
@@ -103,4 +106,4 @@ class GSheets(commands.Cog):
 
 
 async def setup(bot):
-    await bot.add_cog(GSheets(bot))
+    await bot.add_cog(DailyQuestions(bot))

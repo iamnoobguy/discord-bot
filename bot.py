@@ -15,20 +15,23 @@ from discord.ext import commands
 
 from utils.text_format import spaced_padding, CustomFormatter
 from services.xp_service import XPService
-from config import DEBUG_MODE, POSTGRES_DETAILS, DISCORD_TOKEN, OWNER_IDS
+from config import DEBUG_MODE, POSTGRES_CONNSTR, DISCORD_TOKEN, OWNER_IDS
 
 
 INITIAL_EXTENSIONS = [
     "jishaku",
     #
     "exts.dev",
+    "exts.info",
     "exts.levels",
+    "exts.latex",
     #
-    "exts.gsheets",
+    "exts.daily_questions",
 ]
 
 
 class CustomCache:
+    """ """
     pass
 
 
@@ -226,14 +229,12 @@ async def main():
         )
         # exit the loop and the program
 
-        sys.exit(1)
-
     async with (
         BaseBot() as bot,
         asyncpg.create_pool(
+            dsn=POSTGRES_CONNSTR,
             command_timeout=60,
             max_inactive_connection_lifetime=0,
-            **POSTGRES_DETAILS,
         ) as pool,
     ):
         bot.pool = pool

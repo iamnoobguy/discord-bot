@@ -6,7 +6,12 @@ import pytz
 from googleapiclient.discovery import build
 from google.oauth2.service_account import Credentials
 
-import _arch_old._config as _config  # todo: migrate to new config structure
+from config import (
+    GOOGLE_CREDENTIALS_PATH,
+    GOOGLE_API_SCOPES,
+    GOOGLE_SHEET_ID,
+    GOOGLE_SHEET_RANGE,
+)
 
 
 logger = logging.getLogger("bot")
@@ -18,30 +23,30 @@ class GSheetService:
 
     def _build_service(self):
         creds = Credentials.from_service_account_file(
-            _config.GOOGLE_CREDENTIALS_PATH,
-            scopes=_config.API_SCOPES,
+            GOOGLE_CREDENTIALS_PATH,
+            scopes=GOOGLE_API_SCOPES,
         )
         logger.info("Google Sheets service initialized.")
         return build("sheets", "v4", credentials=creds)
 
-    #
-    # PUBLIC METHOD (ASYNC SAFE)
-    #
-    async def fetch_today_question(self) -> dict | None:
+    async def fetch_today_question(self) -> dict[str, str] | None:
+        """Fetch today's question
+
+        Returns:
+            dict[str, str] | None: Dictionary of question data if found, else None
+        """
         return await asyncio.to_thread(self._fetch_today_sync)
 
-    #
-    # INTERNAL SYNC LOGIC (runs in thread)
-    #
+    # Blocking, must be run in thread
     def _fetch_today_sync(self) -> dict | None:
         try:
-            range_name = f"{_config.SHEET_TAB}!A1:O"
+            range_name = GOOGLE_SHEET_RANGE
 
             result = (
                 self._service.spreadsheets()
                 .values()
                 .get(
-                    spreadsheetId=_config.SHEET_ID,
+                    spreadsheetId=GOOGLE_SHEET_ID,
                     range=range_name,
                 )
                 .execute()

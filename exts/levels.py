@@ -2,10 +2,12 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
-import _arch_old._config as _config  # todo: migrate to new config structure
+import config
 
 
 class XPCog(commands.GroupCog, group_name="levels"):
+    """ """
+
     def __init__(self, bot: commands.Bot, xp_service):
         self.bot = bot
         self.xp_service = xp_service
@@ -20,20 +22,20 @@ class XPCog(commands.GroupCog, group_name="levels"):
         next_threshold = 100
         next_level = "Quantum Newbie"
 
-        if _config.XP_THRESHOLDS:
+        if config.XP_THRESHOLDS:
             for threshold, (level_name, _) in sorted(
-                _config.XP_THRESHOLDS.items(), reverse=True
+                config.XP_THRESHOLDS.items(), reverse=True
             ):
                 if current_xp >= threshold:
                     current_level = level_name
-                    higher = sorted(t for t in _config.XP_THRESHOLDS if t > threshold)
+                    higher = sorted(t for t in config.XP_THRESHOLDS if t > threshold)
                     next_threshold = higher[0] if higher else threshold + 500
-                    next_level = _config.XP_THRESHOLDS.get(
+                    next_level = config.XP_THRESHOLDS.get(
                         next_threshold, ("Master", None)
                     )[0]
                     break
             else:
-                next_threshold = sorted(_config.XP_THRESHOLDS.keys())[0]
+                next_threshold = sorted(config.XP_THRESHOLDS.keys())[0]
 
         progress_percent = int((current_xp % next_threshold) / next_threshold * 100)
 
@@ -72,10 +74,10 @@ class XPCog(commands.GroupCog, group_name="levels"):
 
         await interaction.response.send_message(embed=embed)
 
-    # /levels addxp
-    @app_commands.command(name="addxp", description="Add XP to a member")
+    # /levels add-xp
+    @app_commands.command(name="add-xp", description="Add XP to a member")
     @app_commands.checks.has_role("Curator")
-    async def addxp(
+    async def add_xp(
         self,
         interaction: discord.Interaction,
         member: discord.Member,
@@ -87,11 +89,11 @@ class XPCog(commands.GroupCog, group_name="levels"):
             )
             return
 
-        await self.xp_service.add_xp(member.id, amount)
+        await self.xp_service.update_xp(member.id, amount)
         new_xp = await self.xp_service.get_xp(member.id)
 
         # auto ole assignment
-        for threshold, (_, role_name) in _config.XP_THRESHOLDS.items():
+        for threshold, (_, role_name) in config.XP_THRESHOLDS.items():
             if new_xp >= threshold:
                 role = discord.utils.get(interaction.guild.roles, name=role_name)
                 if role and role not in member.roles:
@@ -107,10 +109,10 @@ class XPCog(commands.GroupCog, group_name="levels"):
 
         await interaction.response.send_message(embed=embed)
 
-    # /levels removexp
-    @app_commands.command(name="removexp", description="Remove XP from a member")
+    # /levels remove-xp
+    @app_commands.command(name="remove-xp", description="Remove XP from a member")
     @app_commands.checks.has_role("Curator")
-    async def removexp(
+    async def remove_xp(
         self,
         interaction: discord.Interaction,
         member: discord.Member,
@@ -123,7 +125,7 @@ class XPCog(commands.GroupCog, group_name="levels"):
             return
 
         old_xp = await self.xp_service.get_xp(member.id)
-        await self.xp_service.add_xp(member.id, -amount)
+        await self.xp_service.update_xp(member.id, -amount)
         new_xp = await self.xp_service.get_xp(member.id)
 
         removed = old_xp - new_xp
@@ -135,7 +137,7 @@ class XPCog(commands.GroupCog, group_name="levels"):
             return
 
         # auto role removal
-        for threshold, (_, role_name) in sorted(_config.XP_THRESHOLDS.items()):
+        for threshold, (_, role_name) in sorted(config.XP_THRESHOLDS.items()):
             role = discord.utils.get(interaction.guild.roles, name=role_name)
             if role and role in member.roles and new_xp < threshold:
                 await member.remove_roles(role)
@@ -177,8 +179,8 @@ class XPCog(commands.GroupCog, group_name="levels"):
                 except discord.NotFound:
                     display_name = f"Deleted User ({user_id})"
 
-            prefix = {1: "🥇", 2: "🥈", 3: "🥉"}.get(rank, f"**#{rank}**")
-            lines.append(f"{prefix} **{display_name}** — `{xp} XP`")
+            prefix = {1: "🥇", 2: "🥈", 3: "🥉"}.get(rank, f"{rank}.")
+            lines.append(f"`{prefix}` **{display_name}** — `{xp} XP`")
 
         embed = discord.Embed(
             title="🏆 Physics Club Hall of Fame",
@@ -191,8 +193,8 @@ class XPCog(commands.GroupCog, group_name="levels"):
 
     # todo: integrate with more modularity
     # Error handler for role check
-    @addxp.error
-    @removexp.error
+    @add_xp.error
+    @remove_xp.error
     async def role_error(self, interaction: discord.Interaction, error):
         if isinstance(error, app_commands.errors.MissingRole):
             await interaction.response.send_message(

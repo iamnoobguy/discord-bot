@@ -12,10 +12,24 @@ BotT = TypeVar("BotT", bound="commands.Bot")
 
 
 def re_url_match(url: str):
+    """
+
+    :param url: str:
+    :param url: str: 
+
+    """
     return re.fullmatch(HTTP_URL_REGEX, url)
 
 
 def url_jump_button(url: str, to_where: str = "to Message"):
+    """
+
+    :param url: str:
+    :param to_where: str:  (Default value = "to Message")
+    :param url: str: 
+    :param to_where: str:  (Default value = "to Message")
+
+    """
     if not re_url_match(url):
         raise ValueError("Invalid URL.")
 
@@ -25,6 +39,14 @@ def url_jump_button(url: str, to_where: str = "to Message"):
 
 
 def url_jump_view(url: str, to_where: str = "to Message"):
+    """
+
+    :param url: str:
+    :param to_where: str:  (Default value = "to Message")
+    :param url: str: 
+    :param to_where: str:  (Default value = "to Message")
+
+    """
     if not re_url_match(url):
         raise ValueError("Invalid URL.")
 
@@ -32,16 +54,7 @@ def url_jump_view(url: str, to_where: str = "to Message"):
 
 
 class BaseView(discord.ui.View):
-    """
-    Base View for other views.
-
-    Parameters
-    -----------
-    timeout: :class:`int`
-        Timeout in seconds
-    target
-        The target to use
-    """
+    """Base View for other views."""
 
     def __init__(
         self,
@@ -109,20 +122,7 @@ class BaseView(discord.ui.View):
 
 
 class ConfirmView(BaseView):
-    """
-    View for confirming or denying a request.
-
-    Parameters
-    -----------
-    timeout: :class:`int`
-        Timeout in seconds
-    confirm_msg: :class:`str`
-        The message to edit to when confirming
-    deny_msg: :class:`str`
-        The message to edit to when denying
-    target
-        The target to use
-    """
+    """View for confirming or denying a request."""
 
     def __init__(
         self,
