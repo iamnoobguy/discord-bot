@@ -66,6 +66,16 @@ if "discord" not in sys.modules:
             self.footer = text
 
     discord.Embed = Embed
+    class Interaction:
+        def __init__(self):
+            self.user = None
+            self.response = None
+            self.followup = None
+    discord.Interaction = Interaction
+
+    app_commands = types.ModuleType("discord.app_commands")
+    app_commands.command = lambda *a, **k: (lambda f: f)
+    discord.app_commands = app_commands
 
     ext = types.ModuleType("discord.ext")
     commands = types.ModuleType("discord.ext.commands")
@@ -144,6 +154,23 @@ class DailyQuestionTests(unittest.IsolatedAsyncioTestCase):
         cog.sheet_service.fetch_question_for_date = AsyncMock(return_value=None)
         return cog
 
+
+    def test_next_scheduled_post_rolls_to_next_day_after_cutoff(self):
+        cog = self._make_cog()
+        with patch("exts.daily_questions.DAILY_POST_TIMEZONE", "UTC"):
+            after_cutoff = datetime(2025, 1, 1, 10, 0, tzinfo=pytz.utc)
+            next_post = cog._next_scheduled_post_utc(after_cutoff)
+
+        self.assertEqual(datetime(2025, 1, 2, 9, 0, tzinfo=pytz.utc), next_post)
+
+    def test_schedule_context_uses_configured_timezone_day_key(self):
+        cog = self._make_cog()
+        with patch("exts.daily_questions.DAILY_POST_TIMEZONE", "Asia/Kolkata"):
+            now = datetime(2025, 1, 1, 18, 40, tzinfo=pytz.utc)
+            _, local_day, _ = cog._schedule_context(now)
+
+        self.assertEqual(datetime(2025, 1, 2, 0, 10, tzinfo=pytz.utc).date(), local_day)
+
     async def test_duplicate_prevention_when_already_posted(self):
         conn = Mock()
         conn.fetchval = AsyncMock(return_value=1)
@@ -216,7 +243,7 @@ class DailyQuestionTests(unittest.IsolatedAsyncioTestCase):
         channel.send = AsyncMock()
 
         cog = self._make_cog(conn=conn, channel=channel)
-        cog.sheet_service.fetch_today_question = AsyncMock(return_value=None)
+        cog.sheet_service.fetch_question_for_date = AsyncMock(return_value=None)
 
         await cog.post_daily_question(
             today_key=datetime(2025, 1, 1, tzinfo=pytz.utc).date(),
