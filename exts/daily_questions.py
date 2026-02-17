@@ -65,15 +65,33 @@ class DailyQuestions(commands.Cog):
         today_key = today_key or datetime.now(pytz.utc).date()
         posted_at = posted_at or datetime.now(pytz.utc)
         channel = self.bot.get_channel(DAILY_CHANNEL_ID)
+        channel_id = getattr(channel, "id", DAILY_CHANNEL_ID)
 
         if not channel:
             self.bot.logger.error("Daily question channel not found.")
             return
 
-        question = await self.sheet_service.fetch_today_question()
-        if not question:
-            self.bot.logger.warning("No question today — skipping.")
+        try:
+            question = await self.sheet_service.fetch_today_question()
+        except Exception:
+            self.bot.logger.exception(
+                "Daily question fetch stage failed "
+                "(date=%s, channel_id=%s)",
+                today_key,
+                channel_id,
+            )
             return
+
+        if not question:
+            self.bot.logger.warning(
+                "No daily question found; skipping "
+                "(date=%s, channel_id=%s)",
+                today_key,
+                channel_id,
+            )
+            return
+
+        question_number = str(question.get("Number", "?")).strip() or "?"
 
         try:
             difficulty = question.get("Difficulty", "Medium").strip().title()
@@ -116,48 +134,110 @@ class DailyQuestions(commands.Cog):
 
             embed.set_footer(text="Physics Club Daily Challenge")
 
+        except Exception:
+            self.bot.logger.exception(
+                "Daily question embed stage failed "
+                "(question_number=%s, date=%s, channel_id=%s)",
+                question_number,
+                today_key,
+                channel_id,
+            )
+            return
+
+        try:
             async with self.bot.pool.acquire() as conn:
-                async with conn.transaction():
-                    claimed_today = await conn.fetchval(
-                        """
-                        INSERT INTO daily_question_posts (date, posted_at)
-                        VALUES ($1, $2)
-                        ON CONFLICT (date) DO NOTHING
-                        RETURNING 1
-                        """,
-                        today_key,
-                        posted_at,
-                    )
+                claimed_today = await conn.fetchval(
+                    """
+                    INSERT INTO daily_question_posts (date, posted_at, channel_id)
+                    VALUES ($1, $2, $3)
+                    ON CONFLICT (date) DO NOTHING
+                    RETURNING 1
+                    """,
+                    today_key,
+                    posted_at,
+                    channel_id,
+                )
 
-                    if not claimed_today:
-                        self.bot.logger.info(
-                            f"Daily question for {today_key} already posted. Skipping."
-                        )
-                        return
+            if not claimed_today:
+                self.bot.logger.info(
+                    "Daily question already claimed for posting "
+                    "(question_number=%s, date=%s, channel_id=%s)",
+                    question_number,
+                    today_key,
+                    channel_id,
+                )
+                return
 
-                    message = await channel.send(embed=embed)
+            message = await channel.send(embed=embed)
 
-                    await conn.execute(
-                        """
-                        UPDATE daily_question_posts
-                        SET message_id = $1, channel_id = $2, posted_at = $3
-                        WHERE date = $4
-                        """,
-                        message.id,
-                        channel.id,
-                        posted_at,
-                        today_key,
-                    )
-
-            await message.create_thread(
-                name=f"Discussion: Question #{question.get('Number', '?')}",
-                auto_archive_duration=10080,
+        except Exception:
+            self.bot.logger.exception(
+                "Daily question send stage failed "
+                "(question_number=%s, date=%s, channel_id=%s)",
+                question_number,
+                today_key,
+                channel_id,
             )
 
-            self.bot.logger.info(f"Posted daily question #{question.get('Number')}")
+            async with self.bot.pool.acquire() as conn:
+                await conn.execute(
+                    "DELETE FROM daily_question_posts WHERE date = $1 AND message_id IS NULL",
+                    today_key,
+                )
+            return
 
-        except Exception as e:
-            self.bot.logger.error(f"Daily post error: {e}")
+        thread_id = None
+        try:
+            thread = await message.create_thread(
+                name=f"Discussion: Question #{question_number}",
+                auto_archive_duration=10080,
+            )
+            thread_id = thread.id
+        except Exception:
+            self.bot.logger.warning(
+                "Daily question thread stage failed; message kept "
+                "(question_number=%s, date=%s, channel_id=%s, message_id=%s)",
+                question_number,
+                today_key,
+                channel_id,
+                message.id,
+                exc_info=True,
+            )
+
+        try:
+            async with self.bot.pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    UPDATE daily_question_posts
+                    SET message_id = $1, thread_id = $2, channel_id = $3, posted_at = $4
+                    WHERE date = $5
+                    """,
+                    message.id,
+                    thread_id,
+                    channel_id,
+                    posted_at,
+                    today_key,
+                )
+        except Exception:
+            self.bot.logger.exception(
+                "Daily question record stage failed "
+                "(question_number=%s, date=%s, channel_id=%s, message_id=%s, thread_id=%s)",
+                question_number,
+                today_key,
+                channel_id,
+                message.id,
+                thread_id,
+            )
+            return
+
+        self.bot.logger.info(
+            "Posted daily question (question_number=%s, date=%s, channel_id=%s, message_id=%s, thread_id=%s)",
+            question_number,
+            today_key,
+            channel_id,
+            message.id,
+            thread_id,
+        )
 
 
 async def setup(bot):
