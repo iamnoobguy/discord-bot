@@ -4,4 +4,4 @@
 
 ## TODO
 - [ ] refactor config handling to the new structure
-- [ ] implement proper time tracking for daily questions
+- [x] implement proper time tracking for daily questions

@@ -4,7 +4,12 @@ import discord
 from discord.ext import commands, tasks
 import pytz
 
-from config import DAILY_CHANNEL_ID, DAILY_POST_HOUR, DAILY_POST_MINUTE
+from config import (
+    DAILY_CHANNEL_ID,
+    DAILY_POST_HOUR,
+    DAILY_POST_MINUTE,
+    DAILY_POST_TIMEZONE,
+)
 from services.gsheets_service import GSheetService
 
 
@@ -37,18 +42,21 @@ class DailyQuestions(commands.Cog):
         await self.bot.wait_until_ready()
 
     async def post_daily_question_if_due(self):
+        timezone = pytz.timezone(DAILY_POST_TIMEZONE)
         now = datetime.now(pytz.utc)
-        post_time = now.replace(
+        now_local = now.astimezone(timezone)
+        post_time_local = now_local.replace(
             hour=DAILY_POST_HOUR,
             minute=DAILY_POST_MINUTE,
             second=0,
             microsecond=0,
         )
+        post_time = post_time_local.astimezone(pytz.utc)
 
         if now < post_time:
             return
 
-        today_key = now.date()
+        today_key = now_local.date()
 
         async with self.bot.pool.acquire() as conn:
             already_posted = await conn.fetchval(
@@ -72,7 +80,7 @@ class DailyQuestions(commands.Cog):
             return
 
         try:
-            question = await self.sheet_service.fetch_today_question()
+            question = await self.sheet_service.fetch_question_for_date(today_key)
         except Exception:
             self.bot.logger.exception(
                 "Daily question fetch stage failed "
