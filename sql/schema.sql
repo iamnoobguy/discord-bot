@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS daily_question_posts (
     date DATE PRIMARY KEY,
     message_id BIGINT,
+    thread_id BIGINT,
     channel_id BIGINT,
     posted_at TIMESTAMPTZ
 );
