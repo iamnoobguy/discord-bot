@@ -10,12 +10,27 @@ import dotenv
 import discord
 import asyncpg
 import jishaku
+import pytz
 from termcolor import colored
 from discord.ext import commands
 
 from utils.text_format import spaced_padding, CustomFormatter
 from services.xp_service import XPService
-from config import DEBUG_MODE, POSTGRES_CONNSTR, DISCORD_TOKEN, OWNER_IDS
+import config as bot_config
+
+
+DEBUG_MODE = bot_config.DEBUG_MODE
+POSTGRES_CONNSTR = bot_config.POSTGRES_CONNSTR
+DISCORD_TOKEN = bot_config.DISCORD_TOKEN
+OWNER_IDS = bot_config.OWNER_IDS
+
+GOOGLE_CREDENTIALS_PATH = getattr(bot_config, "GOOGLE_CREDENTIALS_PATH", "")
+GOOGLE_SHEET_ID = getattr(bot_config, "GOOGLE_SHEET_ID", "")
+GOOGLE_SHEET_RANGE = getattr(bot_config, "GOOGLE_SHEET_RANGE", "")
+DAILY_CHANNEL_ID = getattr(bot_config, "DAILY_CHANNEL_ID", 0)
+DAILY_POST_HOUR = getattr(bot_config, "DAILY_POST_HOUR", None)
+DAILY_POST_MINUTE = getattr(bot_config, "DAILY_POST_MINUTE", None)
+DAILY_POST_TIMEZONE = getattr(bot_config, "DAILY_POST_TIMEZONE", "UTC")
 
 
 INITIAL_EXTENSIONS = [
@@ -135,6 +150,8 @@ class BaseBot(commands.AutoShardedBot):
 
         self.logger = bot_logger
 
+        await self.validate_startup_config()
+
         ## -------- Run Schema -------- ##
 
         with open("./sql/schema.sql", "r", encoding="utf-8") as f:
@@ -166,6 +183,108 @@ class BaseBot(commands.AutoShardedBot):
                 attrs=["bold"],
             )
         )
+
+    async def validate_startup_config(self):
+        """Validate required startup configuration before loading extensions."""
+
+        errors: list[str] = []
+        warnings: list[str] = []
+
+        credentials_path = str(GOOGLE_CREDENTIALS_PATH).strip()
+        if not credentials_path:
+            errors.append(
+                "GOOGLE_CREDENTIALS_PATH is not set. Set it in your .env/config to the service-account JSON file."
+            )
+        elif not os.path.isfile(credentials_path):
+            errors.append(
+                f"GOOGLE_CREDENTIALS_PATH points to a missing file: '{credentials_path}'."
+            )
+        elif not os.access(credentials_path, os.R_OK):
+            errors.append(
+                f"GOOGLE_CREDENTIALS_PATH is not readable: '{credentials_path}'."
+            )
+
+        sheet_id = str(GOOGLE_SHEET_ID).strip()
+        if not sheet_id or sheet_id == "your_sheet_id_here":
+            errors.append(
+                "GOOGLE_SHEET_ID is empty or still set to placeholder 'your_sheet_id_here'."
+            )
+
+        sheet_range = str(GOOGLE_SHEET_RANGE).strip()
+        if not sheet_range:
+            errors.append("GOOGLE_SHEET_RANGE is empty. Example: 'Sheet1!A1:O'.")
+
+        if not isinstance(DAILY_CHANNEL_ID, int) or DAILY_CHANNEL_ID <= 0:
+            errors.append(
+                "DAILY_CHANNEL_ID must be a valid Discord snowflake integer (> 0)."
+            )
+
+        if not isinstance(DAILY_POST_HOUR, int) or not (0 <= DAILY_POST_HOUR <= 23):
+            errors.append("DAILY_POST_HOUR must be an integer between 0 and 23.")
+
+        if not isinstance(DAILY_POST_MINUTE, int) or not (0 <= DAILY_POST_MINUTE <= 59):
+            errors.append("DAILY_POST_MINUTE must be an integer between 0 and 59.")
+
+        timezone_name = str(DAILY_POST_TIMEZONE).strip()
+        if not timezone_name:
+            errors.append("DAILY_POST_TIMEZONE is empty. Example: 'UTC' or 'Asia/Kolkata'.")
+        else:
+            try:
+                pytz.timezone(timezone_name)
+            except pytz.UnknownTimeZoneError:
+                errors.append(
+                    f"DAILY_POST_TIMEZONE '{timezone_name}' is invalid. Use an IANA timezone name like 'UTC' or 'America/New_York'."
+                )
+
+        if not errors and isinstance(DAILY_CHANNEL_ID, int) and DAILY_CHANNEL_ID > 0:
+            try:
+                channel = await self.fetch_channel(DAILY_CHANNEL_ID)
+            except discord.NotFound:
+                errors.append(
+                    f"DAILY_CHANNEL_ID {DAILY_CHANNEL_ID} does not exist or is not accessible to the bot."
+                )
+            except discord.Forbidden:
+                errors.append(
+                    f"Bot cannot access DAILY_CHANNEL_ID {DAILY_CHANNEL_ID}. Check bot guild membership and channel visibility permissions."
+                )
+            except discord.HTTPException as exc:
+                errors.append(
+                    f"Failed to fetch DAILY_CHANNEL_ID {DAILY_CHANNEL_ID} due to Discord API error: {exc}."
+                )
+            else:
+                guild = getattr(channel, "guild", None)
+                me = getattr(guild, "me", None) if guild else None
+                if guild is None or me is None:
+                    warnings.append(
+                        "Could not fully verify channel permissions because guild/member cache is unavailable during startup."
+                    )
+                else:
+                    perms = channel.permissions_for(me)
+                    if not perms.send_messages:
+                        errors.append(
+                            f"Bot lacks 'Send Messages' in channel #{channel} ({channel.id})."
+                        )
+
+                    if isinstance(channel, (discord.TextChannel, discord.VoiceChannel)):
+                        if not perms.create_public_threads:
+                            errors.append(
+                                f"Bot lacks 'Create Public Threads' in channel #{channel} ({channel.id})."
+                            )
+                    else:
+                        warnings.append(
+                            f"Skipped thread permission check for unsupported channel type: {type(channel).__name__}."
+                        )
+
+        if warnings:
+            for warning in warnings:
+                self.logger.warning("Config validation warning: %s", warning)
+
+        if errors:
+            msg = "Startup configuration validation failed:\n- " + "\n- ".join(errors)
+            self.logger.error(msg)
+            raise RuntimeError(msg)
+
+        self.logger.info("Startup configuration validation passed.")
 
     async def close(self):
         try:
