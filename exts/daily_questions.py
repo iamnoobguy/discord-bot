@@ -144,31 +144,63 @@ class DailyQuestions(commands.Cog):
             )
             return
 
+        thread_id = None
         try:
             async with self.bot.pool.acquire() as conn:
-                claimed_today = await conn.fetchval(
-                    """
-                    INSERT INTO daily_question_posts (date, posted_at, channel_id)
-                    VALUES ($1, $2, $3)
-                    ON CONFLICT (date) DO NOTHING
-                    RETURNING 1
-                    """,
-                    today_key,
-                    posted_at,
-                    channel_id,
-                )
+                async with conn.transaction():
+                    claimed_today = await conn.fetchval(
+                        """
+                        INSERT INTO daily_question_posts (date, posted_at, channel_id)
+                        VALUES ($1, $2, $3)
+                        ON CONFLICT (date) DO NOTHING
+                        RETURNING 1
+                        """,
+                        today_key,
+                        posted_at,
+                        channel_id,
+                    )
 
-            if not claimed_today:
-                self.bot.logger.info(
-                    "Daily question already claimed for posting "
-                    "(question_number=%s, date=%s, channel_id=%s)",
-                    question_number,
-                    today_key,
-                    channel_id,
-                )
-                return
+                    if not claimed_today:
+                        self.bot.logger.info(
+                            "Daily question already claimed for posting "
+                            "(question_number=%s, date=%s, channel_id=%s)",
+                            question_number,
+                            today_key,
+                            channel_id,
+                        )
+                        return
 
-            message = await channel.send(embed=embed)
+                    message = await channel.send(embed=embed)
+
+                    try:
+                        thread = await message.create_thread(
+                            name=f"Discussion: Question #{question_number}",
+                            auto_archive_duration=10080,
+                        )
+                        thread_id = thread.id
+                    except Exception:
+                        self.bot.logger.warning(
+                            "Daily question thread stage failed; message kept "
+                            "(question_number=%s, date=%s, channel_id=%s, message_id=%s)",
+                            question_number,
+                            today_key,
+                            channel_id,
+                            message.id,
+                            exc_info=True,
+                        )
+
+                    await conn.execute(
+                        """
+                        UPDATE daily_question_posts
+                        SET message_id = $1, thread_id = $2, channel_id = $3, posted_at = $4
+                        WHERE date = $5
+                        """,
+                        message.id,
+                        thread_id,
+                        channel_id,
+                        posted_at,
+                        today_key,
+                    )
 
         except Exception:
             self.bot.logger.exception(
@@ -177,56 +209,6 @@ class DailyQuestions(commands.Cog):
                 question_number,
                 today_key,
                 channel_id,
-            )
-
-            async with self.bot.pool.acquire() as conn:
-                await conn.execute(
-                    "DELETE FROM daily_question_posts WHERE date = $1 AND message_id IS NULL",
-                    today_key,
-                )
-            return
-
-        thread_id = None
-        try:
-            thread = await message.create_thread(
-                name=f"Discussion: Question #{question_number}",
-                auto_archive_duration=10080,
-            )
-            thread_id = thread.id
-        except Exception:
-            self.bot.logger.warning(
-                "Daily question thread stage failed; message kept "
-                "(question_number=%s, date=%s, channel_id=%s, message_id=%s)",
-                question_number,
-                today_key,
-                channel_id,
-                message.id,
-                exc_info=True,
-            )
-
-        try:
-            async with self.bot.pool.acquire() as conn:
-                await conn.execute(
-                    """
-                    UPDATE daily_question_posts
-                    SET message_id = $1, thread_id = $2, channel_id = $3, posted_at = $4
-                    WHERE date = $5
-                    """,
-                    message.id,
-                    thread_id,
-                    channel_id,
-                    posted_at,
-                    today_key,
-                )
-        except Exception:
-            self.bot.logger.exception(
-                "Daily question record stage failed "
-                "(question_number=%s, date=%s, channel_id=%s, message_id=%s, thread_id=%s)",
-                question_number,
-                today_key,
-                channel_id,
-                message.id,
-                thread_id,
             )
             return
 

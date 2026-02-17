@@ -10,3 +10,6 @@ CREATE TABLE IF NOT EXISTS daily_question_posts (
     channel_id BIGINT,
     posted_at TIMESTAMPTZ
 );
+
+ALTER TABLE daily_question_posts
+ADD COLUMN IF NOT EXISTS thread_id BIGINT;
