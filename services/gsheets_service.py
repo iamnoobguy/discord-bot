@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime
+from datetime import date, datetime
 import pytz
 
 from googleapiclient.discovery import build
@@ -29,16 +29,20 @@ class GSheetService:
         logger.info("Google Sheets service initialized.")
         return build("sheets", "v4", credentials=creds)
 
-    async def fetch_today_question(self) -> dict[str, str] | None:
-        """Fetch today's question
+    async def fetch_question_for_date(self, question_date: date) -> dict[str, str] | None:
+        """Fetch the question for a specific calendar date.
 
         Returns:
             dict[str, str] | None: Dictionary of question data if found, else None
         """
-        return await asyncio.to_thread(self._fetch_today_sync)
+        return await asyncio.to_thread(self._fetch_date_sync, question_date)
+
+    async def fetch_today_question(self) -> dict[str, str] | None:
+        """Backwards-compatible helper that fetches the UTC day's question."""
+        return await self.fetch_question_for_date(datetime.now(pytz.utc).date())
 
     # Blocking, must be run in thread
-    def _fetch_today_sync(self) -> dict | None:
+    def _fetch_date_sync(self, question_date: date) -> dict | None:
         try:
             range_name = GOOGLE_SHEET_RANGE
 
@@ -58,7 +62,7 @@ class GSheetService:
                 return None
 
             headers = values[0]
-            today_str = datetime.now(pytz.utc).strftime("%Y-%m-%d")
+            target_date = question_date.strftime("%Y-%m-%d")
 
             for row in values[1:]:
                 if len(row) < len(headers):
@@ -66,15 +70,19 @@ class GSheetService:
 
                 row_dict = dict(zip(headers, row))
 
-                if row_dict.get("Date", "").strip() == today_str:
+                if row_dict.get("Date", "").strip() == target_date:
                     logger.info(
-                        f"Found question #{row_dict.get('Number', '?')} for {today_str}"
+                        f"Found question #{row_dict.get('Number', '?')} for {target_date}"
                     )
                     return row_dict
 
-            logger.warning(f"No question found for {today_str}")
+            logger.warning(f"No question found for {target_date}")
             return None
 
         except Exception as e:
             logger.error(f"Sheet fetch error: {e}")
             return None
+
+    # Backwards-compatibility for existing tests/callers.
+    def _fetch_today_sync(self) -> dict | None:
+        return self._fetch_date_sync(datetime.now(pytz.utc).date())

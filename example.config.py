@@ -26,6 +26,7 @@ DAILY_CHANNEL_ID = 000000000000000000  # channel to post daily questions
 REVIEW_CHANNEL_ID = 000000000000000000  # channel for review answers
 DAILY_POST_HOUR = 9
 DAILY_POST_MINUTE = 0 # means 9:00 UTC 
+DAILY_POST_TIMEZONE = "UTC"  # IANA timezone used for schedule + date matching
 
 # ===== XP & Leveling Config =====
 XP_THRESHOLDS = {
