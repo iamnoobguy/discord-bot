@@ -68,10 +68,21 @@ class DailyQuestions(commands.Cog):
         await self.bot.wait_until_ready()
 
     async def post_daily_question_if_due(self):
-        now, today_key, post_time = self._schedule_context()
+        timezone = pytz.timezone(DAILY_POST_TIMEZONE)
+        now = datetime.now(pytz.utc)
+        now_local = now.astimezone(timezone)
+        post_time_local = now_local.replace(
+            hour=DAILY_POST_HOUR,
+            minute=DAILY_POST_MINUTE,
+            second=0,
+            microsecond=0,
+        )
+        post_time = post_time_local.astimezone(pytz.utc)
 
         if now < post_time:
             return
+
+        today_key = now_local.date()
 
         async with self.bot.pool.acquire() as conn:
             already_posted = await conn.fetchval(

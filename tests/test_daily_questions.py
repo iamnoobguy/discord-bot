@@ -151,6 +151,7 @@ class DailyQuestionTests(unittest.IsolatedAsyncioTestCase):
         cog.bot = bot
         cog.sheet_service = Mock()
         cog.sheet_service.fetch_question_for_date = AsyncMock(return_value=None)
+        cog.sheet_service.fetch_question_for_date = AsyncMock(return_value=None)
         return cog
 
 
