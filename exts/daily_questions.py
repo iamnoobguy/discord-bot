@@ -181,8 +181,12 @@ class DailyQuestions(commands.Cog):
 
             async with self.bot.pool.acquire() as conn:
                 await conn.execute(
-                    "DELETE FROM daily_question_posts WHERE date = $1 AND message_id IS NULL",
+                    (
+                        "DELETE FROM daily_question_posts "
+                        "WHERE date = $1 AND message_id IS NULL AND channel_id = $2"
+                    ),
                     today_key,
+                    channel_id,
                 )
             return
 
