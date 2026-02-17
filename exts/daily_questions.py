@@ -30,16 +30,40 @@ class DailyQuestions(commands.Cog):
     # Scheduler discord.ext.tasks
     @tasks.loop(minutes=1)
     async def daily_question(self):
-        now = datetime.now(pytz.utc)
-
-        if now.hour == DAILY_POST_HOUR and now.minute == DAILY_POST_MINUTE:
-            await self.post_daily_question()
+        await self.post_daily_question_if_due()
 
     @daily_question.before_loop
     async def before_daily(self):
         await self.bot.wait_until_ready()
 
-    async def post_daily_question(self):
+    async def post_daily_question_if_due(self):
+        now = datetime.now(pytz.utc)
+        post_time = now.replace(
+            hour=DAILY_POST_HOUR,
+            minute=DAILY_POST_MINUTE,
+            second=0,
+            microsecond=0,
+        )
+
+        if now < post_time:
+            return
+
+        today_key = now.date()
+
+        async with self.bot.pool.acquire() as conn:
+            already_posted = await conn.fetchval(
+                "SELECT 1 FROM daily_question_posts WHERE date = $1",
+                today_key,
+            )
+
+        if already_posted:
+            return
+
+        await self.post_daily_question(today_key=today_key, posted_at=now)
+
+    async def post_daily_question(self, today_key=None, posted_at=None):
+        today_key = today_key or datetime.now(pytz.utc).date()
+        posted_at = posted_at or datetime.now(pytz.utc)
         channel = self.bot.get_channel(DAILY_CHANNEL_ID)
 
         if not channel:
@@ -59,7 +83,7 @@ class DailyQuestions(commands.Cog):
                 title=f"Daily Physics Question #{question.get('Number', '?')}",
                 description=question.get("Problem Statement", "No statement."),
                 color=color,
-                timestamp=datetime.now(pytz.utc),
+                timestamp=posted_at,
             )
 
             embed.add_field(
@@ -92,7 +116,38 @@ class DailyQuestions(commands.Cog):
 
             embed.set_footer(text="Physics Club Daily Challenge")
 
-            message = await channel.send(embed=embed)
+            async with self.bot.pool.acquire() as conn:
+                async with conn.transaction():
+                    claimed_today = await conn.fetchval(
+                        """
+                        INSERT INTO daily_question_posts (date, posted_at)
+                        VALUES ($1, $2)
+                        ON CONFLICT (date) DO NOTHING
+                        RETURNING 1
+                        """,
+                        today_key,
+                        posted_at,
+                    )
+
+                    if not claimed_today:
+                        self.bot.logger.info(
+                            f"Daily question for {today_key} already posted. Skipping."
+                        )
+                        return
+
+                    message = await channel.send(embed=embed)
+
+                    await conn.execute(
+                        """
+                        UPDATE daily_question_posts
+                        SET message_id = $1, channel_id = $2, posted_at = $3
+                        WHERE date = $4
+                        """,
+                        message.id,
+                        channel.id,
+                        posted_at,
+                        today_key,
+                    )
 
             await message.create_thread(
                 name=f"Discussion: Question #{question.get('Number', '?')}",
